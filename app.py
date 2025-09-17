@@ -6,10 +6,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from telegram.request import HTTPXRequest
 
 # --- Configuração ---
-TOKEN = os.getenv('TELEGRAM_TOKEN')
+TOKEN = os.getenv('TELEGRAM_TOKEN')  # lembre-se de configurar no Render!
 app = Flask(__name__)
 
-# Configuração de timeout para aguentar o "acordar" do Render
+# Timeout maior para Render "acordar"
 httpx_request = HTTPXRequest(connect_timeout=40.0, pool_timeout=40.0)
 application = Application.builder().token(TOKEN).request(httpx_request).build()
 
@@ -28,10 +28,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde ao comando /start com uma mensagem de espera e o menu."""
     chat_id = update.message.chat_id
     print(f"Comando /start recebido do chat ID: {chat_id}")
-    
-    # SUA IDEIA EM AÇÃO: Enviando uma mensagem de "acordando" primeiro.
+
     await context.bot.send_message(chat_id=chat_id, text="Opa! Só um segundo, estou acordando aqui... 🤖")
-    
+
     keyboard = [
         [InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)]
         for key, data in tournaments.items()
@@ -46,7 +45,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     tournament_key = query.data
     tournament = tournaments.get(tournament_key)
-    
+
     if tournament:
         print(f"Botão '{tournament_key}' clicado.")
         confirmation_text = f"✅ Beleza! Você selecionou o torneio *{tournament['name']}*."
@@ -60,18 +59,26 @@ application.add_handler(CallbackQueryHandler(button_callback))
 # Rotas do Servidor
 # ==============================
 @app.route("/telegram_webhook", methods=["POST"])
-async def telegram_webhook():
+def telegram_webhook():
     """Recebe as mensagens do Telegram."""
-    # Inicialização "preguiçosa" para garantir que o bot esteja pronto
-    if not application.post_init:
-        await application.initialize()
-        await application.post_init()
-        
     update_data = request.get_json(force=True)
     update = Update.de_json(update_data, application.bot)
-    await application.process_update(update)
+
+    async def process():
+        if not application.post_init:
+            await application.initialize()
+            await application.post_init()
+        await application.process_update(update)
+
+    asyncio.run(process())
     return "ok", 200
 
-@app.route('/')
+@app.route("/")
 def index():
-    return "Servidor estável do Bot de Torneios está no ar!"
+    return "Servidor estável do Bot de Torneios está no ar!", 200
+
+# ==============================
+# Execução Local (para testes)
+# ==============================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)

@@ -7,19 +7,19 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.request import HTTPXRequest
 
-# --- Configuration ---
+# --- Configuração ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
-# --- Initialization ---
+# --- Inicialização ---
 app = Flask(__name__)
 
-# Timeout configuration for Render
+# Configuração de timeout para o Render
 httpx_request = HTTPXRequest(connect_timeout=30.0, pool_timeout=30.0)
 application = Application.builder().token(TELEGRAM_TOKEN).request(httpx_request).build()
 
-# --- Tournament Data ---
+# --- Dados dos Torneios ---
 tournaments = {
     "3v3": {"name": "3v3", "price": 59.90},
     "standard": {"name": "Standard", "price": 9.90},
@@ -28,57 +28,57 @@ tournaments = {
 }
 
 # ==============================
-# Telegram Bot Functions
+# Funções do Bot do Telegram
 # ==============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responds to the /start command with a button menu."""
-    logging.info(f"Received /start command from chat ID: {update.message.chat_id}")
+    """Responde ao comando /start com um menu de botões."""
+    logging.info(f"Comando /start recebido do chat ID: {update.message.chat_id}")
     keyboard = [
         [InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)]
         for key, data in tournaments.items()
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Choose your tournament:", reply_markup=reply_markup)
+    await update.message.reply_text("Escolha seu torneio:", reply_markup=reply_markup)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responds to a button click."""
+    """Responde ao clique em um botão."""
     query = update.callback_query
     await query.answer()
     tournament_key = query.data
     tournament = tournaments.get(tournament_key)
-    logging.info(f"Button '{tournament_key}' clicked by {query.from_user.id}.")
+    logging.info(f"Botão '{tournament_key}' clicado por {query.from_user.id}.")
     
     if tournament:
-        confirmation_text = f"✅ Selection confirmed: *{tournament['name']}*.\n(Stable communication!)"
+        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Comunicação estável!)"
         await query.edit_message_text(text=confirmation_text, parse_mode='Markdown')
 
-# --- Registering functions with the bot ---
+# --- Registrando as funções no bot ---
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(button_callback))
 
 # ==============================
-# Flask Server Routes
+# Rotas do Servidor Flask
 # ==============================
 
 @app.route("/")
 def home():
-    """Main route to check if the app is live."""
-    return "Bot server is active and stable!"
+    """Rota principal para verificar se o app está no ar."""
+    return "Servidor do Bot está ativo e estável!"
 
 @app.route("/telegram_webhook", methods=["POST"])
 async def telegram_webhook():
-    """Receives messages from Telegram."""
-    # THIS IS THE FINAL AND MOST IMPORTANT FIX
-    # Initialize the bot only on the first request to ensure the "engine" is on
+    """Recebe as mensagens do Telegram."""
+    # ESTA É A CORREÇÃO FINAL E MAIS IMPORTANTE
+    # Inicializa o bot apenas na primeira requisição para garantir que o "motor" esteja ligado
     if not application.post_init:
         await application.initialize()
-        await application.post_init() # This is the corrected part
+        await application.post_init() # Esta é a parte corrigida
 
     try:
         update_data = request.get_json(force=True)
         update = Update.de_json(update_data, application.bot)
         await application.process_update(update)
     except Exception as e:
-        logging.error(f"Error in Telegram webhook: {e}")
+        logging.error(f"Erro no webhook do Telegram: {e}")
     return "ok", 200

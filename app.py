@@ -6,53 +6,10 @@ from flask import Flask, request
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-print("--> Bot e Flask (ordem invertida) inicializados.")
-
-# --- Dados dos Torneios ---
-tournaments = {
-    "3v3": {"name": "3v3", "price": 59.90},
-    "standard": {"name": "Standard", "price": 9.90},
-    "no-ex": {"name": "NO-EX", "price": 4.90},
-    "teste": {"name": "Teste", "price": 1.00},
-}
+print("--> Bot de Teste 'OI' inicializado.")
 
 # ==============================
-# Funções do Bot (Handlers) - AGORA VÊM PRIMEIRO
-# ==============================
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    print(f"--> Comando /start recebido do chat ID: {message.chat.id}")
-    
-    markup = telebot.types.InlineKeyboardMarkup(row_width=1)
-    buttons = [
-        telebot.types.InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)
-        for key, data in tournaments.items()
-    ]
-    markup.add(*buttons)
-    
-    bot.reply_to(message, "Escolha seu torneio:", reply_markup=markup)
-    print(f"--> Menu enviado para: {message.chat.id}")
-
-@bot.callback_query_handler(func=lambda call: True)
-def handle_query(call):
-    print(f"--> Botão '{call.data}' clicado.")
-    tournament_key = call.data
-    tournament = tournaments.get(tournament_key)
-    
-    if tournament:
-        bot.answer_callback_query(call.id)
-        
-        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*."
-        bot.edit_message_text(
-            confirmation_text,
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        print(f"--> Mensagem de confirmação enviada.")
-
-# ==============================
-# Rota do Webhook e Servidor - AGORA VÊM POR ÚLTIMO
+# Rota do Webhook
 # ==============================
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -66,6 +23,19 @@ def webhook():
         print(f"--> ERRO no webhook: {e}")
         return "Erro", 500
 
+# ==============================
+# Handler Mínimo (Pega TUDO)
+# ==============================
+@bot.message_handler(func=lambda message: True)
+def send_oi(message):
+    print(f"--> Tentando enviar 'oi' para o chat ID: {message.chat.id}")
+    try:
+        bot.reply_to(message, "oi")
+        print(f"--> 'oi' enviado com sucesso.")
+    except Exception as e:
+        print(f"--> ERRO AO TENTAR ENVIAR 'oi': {e}")
+
+# Rota para checar se o servidor está no ar
 @app.route('/')
 def index():
-    return "Servidor do Bot está ativo!"
+    return "Servidor de teste 'OI' está ativo!"

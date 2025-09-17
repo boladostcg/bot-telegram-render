@@ -1,17 +1,43 @@
-     ==> Deploying...
-==> Running 'gunicorn app:app'
-[2025-09-17 17:50:11 +0000] [55] [INFO] Starting gunicorn 23.0.0
-[2025-09-17 17:50:11 +0000] [55] [INFO] Listening at: http://0.0.0.0:10000 (55)
-[2025-09-17 17:50:11 +0000] [55] [INFO] Using worker: sync
-[2025-09-17 17:50:11 +0000] [58] [INFO] Booting worker with pid: 58
---> Bot de Teste 'OI' inicializado.
-127.0.0.1 - - [17/Sep/2025:17:50:11 +0000] "HEAD / HTTP/1.1" 200 0 "-" "Go-http-client/1.1"
-     ==> Your service is live 🎉
-     ==> 
-     ==> ///////////////////////////////////////////////////////////
-     ==> 
-     ==> Available at your primary URL https://bolados-tcg-telegram-tickets.onrender.com
-     ==> 
-     ==> ///////////////////////////////////////////////////////////
---> Rota /webhook foi chamada!
-127.0.0.1 - - [17/Sep/2025:17:50:57 +0000] "POST /webhook HTTP/1.1" 200 2 "-" "-"
+import os
+import telebot
+from flask import Flask, request
+
+# --- Configuração ---
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__)
+print("--> Bot de Teste 'OI' v2 (send_message) inicializado.")
+
+# ==============================
+# Rota do Webhook
+# ==============================
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    print("--> Rota /webhook foi chamada!")
+    try:
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "OK", 200
+    except Exception as e:
+        print(f"--> ERRO no webhook: {e}")
+        return "Erro", 500
+
+# ==============================
+# Handler Mínimo (Pega TUDO)
+# ==============================
+@bot.message_handler(func=lambda message: True)
+def send_oi(message):
+    chat_id = message.chat.id
+    print(f"--> Tentando enviar 'oi' para o chat ID: {chat_id}")
+    try:
+        # MUDANÇA: Usando send_message em vez de reply_to
+        bot.send_message(chat_id, "oi")
+        print(f"--> 'oi' enviado com sucesso.")
+    except Exception as e:
+        print(f"--> ERRO AO TENTAR ENVIAR 'oi': {e}")
+
+# Rota para checar se o servidor está no ar
+@app.route('/')
+def index():
+    return "Servidor de teste 'OI' v2 está ativo!"

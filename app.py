@@ -1,69 +1,73 @@
 import os
+import telebot
 from flask import Flask, request
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.request import HTTPXRequest
 
-# --- Configurações do Bot ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TELEGRAM_TOKEN:
-    raise ValueError("❌ Variável de ambiente TELEGRAM_TOKEN não encontrada!")
-
+# --- Configuração ---
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
+print("--> Bot e Flask (versão definitiva) inicializados.")
 
-# Configuração de timeout para aguentar o "acordar" do Render
-httpx_request = HTTPXRequest(connect_timeout=40.0, pool_timeout=40.0)
-application = Application.builder().token(TELEGRAM_TOKEN).request(httpx_request).build()
+# --- Dados dos Torneios ---
+tournaments = {
+    "3v3": {"name": "3v3", "price": 59.90},
+    "standard": {"name": "Standard", "price": 9.90},
+    "no-ex": {"name": "NO-EX", "price": 4.90},
+    "teste": {"name": "Teste", "price": 1.00},
+}
 
-# --- Handlers do Telegram ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start mostra os torneios disponíveis"""
-    chat_id = update.message.chat_id
-    print(f"Comando /start recebido de {chat_id}")
-
-    await context.bot.send_message(chat_id=chat_id, text="Processando... só um segundo. 🤖")
-
-    keyboard = [
-        [InlineKeyboardButton("3v3 — R$59,90", callback_data="3v3")],
-        [InlineKeyboardButton("Standard — R$9,90", callback_data="standard")],
-        [InlineKeyboardButton("NO-EX — R$4,90", callback_data="noex")],
-        [InlineKeyboardButton("Teste — R$1,00", callback_data="teste")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Escolha seu torneio:", reply_markup=reply_markup)
-    print(f"Menu enviado para {chat_id}")
-
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lida com o clique no botão."""
-    query = update.callback_query
-    await query.answer()
-    tournament_key = query.data
-    print(f"Botão '{tournament_key}' clicado.")
-    await query.edit_message_text(
-        text=f"✅ Seleção confirmada: *{tournament_key}*.",
-        parse_mode='Markdown'
-    )
-
-# Registrando os Handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CallbackQueryHandler(button_callback))
-
-# --- Rotas Flask ---
-@app.route("/")
-def home():
-    return "🤖 Bot BoladosTCG está rodando no Render!"
-
-@app.route("/telegram_webhook", methods=["POST"])
-async def telegram_webhook():
-    """Recebe updates do Telegram via webhook"""
+# ==============================
+# Rota do Webhook
+# ==============================
+# O Telegram vai enviar TODAS as mensagens para esta rota
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    print("--> Rota /webhook foi chamada!")
     try:
-        if not application.post_init:
-            await application.initialize()
-            await application.post_init()
-
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        await application.process_update(update)
-        return "ok"
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "OK", 200
     except Exception as e:
-        print(f"❌ Erro no webhook: {e}")
-        return "erro", 500
+        print(f"--> ERRO no webhook: {e}")
+        return "Erro", 500
+
+# ==============================
+# Funções do Bot (Handlers)
+# ==============================
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    print(f"--> Comando /start recebido do chat ID: {message.chat.id}")
+    
+    markup = telebot.types.InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        telebot.types.InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)
+        for key, data in tournaments.items()
+    ]
+    markup.add(*buttons)
+    
+    bot.reply_to(message, "Escolha seu torneio:", reply_markup=markup)
+    print(f"--> Menu enviado para: {message.chat.id}")
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_query(call):
+    print(f"--> Botão '{call.data}' clicado.")
+    tournament_key = call.data
+    tournament = tournaments.get(tournament_key)
+    
+    if tournament:
+        bot.answer_callback_query(call.id)
+        
+        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*."
+        bot.edit_message_text(
+            confirmation_text,
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+        print(f"--> Mensagem de confirmação enviada.")
+
+# Rota para checar se o servidor está no ar
+@app.route('/')
+def index():
+    return "Servidor do Bot está 100% funcional."

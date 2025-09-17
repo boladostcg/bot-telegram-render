@@ -1,3 +1,4 @@
-Flask==2.2.5
-pyTelegramBotAPI==4.15.4
+Flask[async]==2.2.5
+python-telegram-bot==20.3
 gunicorn==23.0.0
+uvicorn==0.23.2

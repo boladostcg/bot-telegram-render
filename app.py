@@ -5,6 +5,7 @@ import asyncio
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.request import HTTPXRequest # <-- IMPORTAÇÃO ADICIONADA
 
 # --- Configuração de Logging (para nos ajudar a ver o que acontece no Render) ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -14,7 +15,12 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 # --- Inicialização ---
 app = Flask(__name__)
-application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+# Aumentando o tempo de espera para ser compatível com o plano gratuito do Render
+# ESTA É A PARTE QUE FOI ALTERADA PARA CORRIGIR O ERRO
+httpx_request = HTTPXRequest(connect_timeout=30.0, pool_timeout=30.0)
+application = Application.builder().token(TELEGRAM_TOKEN).request(httpx_request).build()
+
 
 # --- Dados dos Torneios (Apenas para o menu) ---
 tournaments = {

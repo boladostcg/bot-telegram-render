@@ -50,7 +50,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"Botão '{tournament_key}' clicado por {query.from_user.id}.")
     
     if tournament:
-        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Teste de comunicação OK!)"
+        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Comunicação estável!)"
         await query.edit_message_text(text=confirmation_text, parse_mode='Markdown')
 
 # --- Registrando as funções no bot ---
@@ -69,6 +69,11 @@ def home():
 @app.route("/telegram_webhook", methods=["POST"])
 async def telegram_webhook():
     """Recebe as mensagens do Telegram."""
+    # ESTA É A CORREÇÃO FINAL E MAIS IMPORTANTE
+    # Inicializa o bot apenas na primeira requisição para garantir que o "motor" esteja ligado
+    if not application.initialized:
+        await application.initialize()
+
     try:
         update_data = request.get_json(force=True)
         update = Update.de_json(update_data, application.bot)
@@ -76,6 +81,3 @@ async def telegram_webhook():
     except Exception as e:
         logging.error(f"Erro no webhook do Telegram: {e}")
     return "ok", 200
-
-# A inicialização manual com asyncio.run() e main() foi removida.
-# O Gunicorn agora gerencia o ciclo de vida do aplicativo.

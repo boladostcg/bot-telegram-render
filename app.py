@@ -6,7 +6,7 @@ from flask import Flask, request
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-print("--> Bot e Flask (versão definitiva) inicializados.")
+print("--> Bot e Flask (ordem invertida) inicializados.")
 
 # --- Dados dos Torneios ---
 tournaments = {
@@ -17,23 +17,7 @@ tournaments = {
 }
 
 # ==============================
-# Rota do Webhook
-# ==============================
-# O Telegram vai enviar TODAS as mensagens para esta rota
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    print("--> Rota /webhook foi chamada!")
-    try:
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "OK", 200
-    except Exception as e:
-        print(f"--> ERRO no webhook: {e}")
-        return "Erro", 500
-
-# ==============================
-# Funções do Bot (Handlers)
+# Funções do Bot (Handlers) - AGORA VÊM PRIMEIRO
 # ==============================
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -67,7 +51,21 @@ def handle_query(call):
         )
         print(f"--> Mensagem de confirmação enviada.")
 
-# Rota para checar se o servidor está no ar
+# ==============================
+# Rota do Webhook e Servidor - AGORA VÊM POR ÚLTIMO
+# ==============================
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    print("--> Rota /webhook foi chamada!")
+    try:
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "OK", 200
+    except Exception as e:
+        print(f"--> ERRO no webhook: {e}")
+        return "Erro", 500
+
 @app.route('/')
 def index():
-    return "Servidor do Bot está 100% funcional."
+    return "Servidor do Bot está ativo!"

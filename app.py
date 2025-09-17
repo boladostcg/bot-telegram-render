@@ -1,0 +1,84 @@
+import os
+import logging
+import asyncio
+
+from flask import Flask, request
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+
+# --- Configuração de Logging (para nos ajudar a ver o que acontece no Render) ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# --- Variáveis de Ambiente (MODO SEGURO) ---
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+
+# --- Inicialização ---
+app = Flask(__name__)
+application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+# --- Dados dos Torneios (Apenas para o menu) ---
+tournaments = {
+    "3v3": {"name": "3v3", "price": 59.90},
+    "standard": {"name": "Standard", "price": 9.90},
+    "no-ex": {"name": "NO-EX", "price": 4.90},
+    "teste": {"name": "Teste", "price": 1.00},
+}
+
+# ==============================
+# Funções do Bot do Telegram
+# ==============================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde ao comando /start com um menu de botões."""
+    logging.info(f"Comando /start recebido do chat ID: {update.message.chat_id}")
+    keyboard = [
+        [InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)]
+        for key, data in tournaments.items()
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Escolha seu torneio:", reply_markup=reply_markup)
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde ao clique em um botão."""
+    query = update.callback_query
+    await query.answer()
+    tournament_key = query.data
+    tournament = tournaments.get(tournament_key)
+    logging.info(f"Botão '{tournament_key}' clicado.")
+    
+    if tournament:
+        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Teste de comunicação OK!)"
+        await query.edit_message_text(text=confirmation_text, parse_mode='Markdown')
+
+# --- Registrando as funções no bot ---
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(button_callback))
+
+# ==============================
+# Rotas do Servidor Flask
+# ==============================
+
+@app.route("/")
+def home():
+    """Rota principal para verificar se o app está no ar."""
+    return "Servidor do Bot está ativo!"
+
+@app.route("/telegram_webhook", methods=["POST"])
+async def telegram_webhook():
+    """Recebe as mensagens do Telegram."""
+    try:
+        update_data = request.get_json(force=True)
+        update = Update.de_json(update_data, application.bot)
+        await application.process_update(update)
+    except Exception as e:
+        logging.error(f"Erro no webhook do Telegram: {e}")
+    return "ok", 200
+
+# --- Inicialização para o Render ---
+async def main():
+    await application.initialize()
+
+if __name__ != '__main__':
+    # Esta parte é executada quando o Gunicorn inicia o app
+    logging.info("Iniciando a aplicação para produção...")
+    asyncio.run(main())

@@ -5,24 +5,21 @@ import asyncio
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.request import HTTPXRequest # <-- IMPORTAÇÃO ADICIONADA
+from telegram.request import HTTPXRequest
 
-# --- Configuração de Logging (para nos ajudar a ver o que acontece no Render) ---
+# --- Configuração ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# --- Variáveis de Ambiente (MODO SEGURO) ---
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 # --- Inicialização ---
 app = Flask(__name__)
 
-# Aumentando o tempo de espera para ser compatível com o plano gratuito do Render
-# ESTA É A PARTE QUE FOI ALTERADA PARA CORRIGIR O ERRO
+# Configuração de timeout para o Render
 httpx_request = HTTPXRequest(connect_timeout=30.0, pool_timeout=30.0)
 application = Application.builder().token(TELEGRAM_TOKEN).request(httpx_request).build()
 
-
-# --- Dados dos Torneios (Apenas para o menu) ---
+# --- Dados dos Torneios ---
 tournaments = {
     "3v3": {"name": "3v3", "price": 59.90},
     "standard": {"name": "Standard", "price": 9.90},
@@ -50,7 +47,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     tournament_key = query.data
     tournament = tournaments.get(tournament_key)
-    logging.info(f"Botão '{tournament_key}' clicado.")
+    logging.info(f"Botão '{tournament_key}' clicado por {query.from_user.id}.")
     
     if tournament:
         confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Teste de comunicação OK!)"
@@ -67,7 +64,7 @@ application.add_handler(CallbackQueryHandler(button_callback))
 @app.route("/")
 def home():
     """Rota principal para verificar se o app está no ar."""
-    return "Servidor do Bot está ativo!"
+    return "Servidor do Bot está ativo e estável!"
 
 @app.route("/telegram_webhook", methods=["POST"])
 async def telegram_webhook():
@@ -80,11 +77,5 @@ async def telegram_webhook():
         logging.error(f"Erro no webhook do Telegram: {e}")
     return "ok", 200
 
-# --- Inicialização para o Render ---
-async def main():
-    await application.initialize()
-
-if __name__ != '__main__':
-    # Esta parte é executada quando o Gunicorn inicia o app
-    logging.info("Iniciando a aplicação para produção...")
-    asyncio.run(main())
+# A inicialização manual com asyncio.run() e main() foi removida.
+# O Gunicorn agora gerencia o ciclo de vida do aplicativo.

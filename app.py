@@ -1,23 +1,17 @@
 import os
 import logging
-import asyncio
-
+import telebot
 from flask import Flask, request
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.request import HTTPXRequest
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- Configuração ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+APP_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}" # Pega a URL do Render automaticamente
 
-# --- Inicialização ---
+bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-
-# Configuração de timeout para o Render
-httpx_request = HTTPXRequest(connect_timeout=30.0, pool_timeout=30.0)
-application = Application.builder().token(TELEGRAM_TOKEN).request(httpx_request).build()
 
 # --- Dados dos Torneios ---
 tournaments = {
@@ -31,31 +25,36 @@ tournaments = {
 # Funções do Bot do Telegram
 # ==============================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde ao comando /start com um menu de botões."""
-    logging.info(f"Comando /start recebido do chat ID: {update.message.chat_id}")
-    keyboard = [
-        [InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)]
+# Lida com o comando /start
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    logging.info(f"Comando /start recebido de {message.chat.id}")
+    markup = InlineKeyboardMarkup(row_width=1)
+    
+    buttons = [
+        InlineKeyboardButton(f"{data['name']} — R${data['price']:.2f}", callback_data=key)
         for key, data in tournaments.items()
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Escolha seu torneio:", reply_markup=reply_markup)
+    markup.add(*buttons)
+    
+    bot.send_message(message.chat.id, "Escolha seu torneio:", reply_markup=markup)
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde ao clique em um botão."""
-    query = update.callback_query
-    await query.answer()
-    tournament_key = query.data
+# Lida com o clique nos botões
+@bot.callback_query_handler(func=lambda call: True)
+def handle_query(call):
+    tournament_key = call.data
     tournament = tournaments.get(tournament_key)
-    logging.info(f"Botão '{tournament_key}' clicado por {query.from_user.id}.")
+    chat_id = call.message.chat.id
     
     if tournament:
-        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n(Comunicação estável!)"
-        await query.edit_message_text(text=confirmation_text, parse_mode='Markdown')
-
-# --- Registrando as funções no bot ---
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CallbackQueryHandler(button_callback))
+        logging.info(f"Botão '{tournament_key}' clicado por {chat_id}")
+        
+        # Sua ideia é excelente! Vamos avisar o usuário.
+        bot.answer_callback_query(call.id, f"Processando sua escolha: {tournament['name']}")
+        
+        # Simula um "despertar" e prepara para o próximo passo
+        confirmation_text = f"✅ Seleção confirmada: *{tournament['name']}*.\n\nPronto para gerar o pagamento!"
+        bot.edit_message_text(confirmation_text, chat_id, call.message.message_id, parse_mode='Markdown')
 
 # ==============================
 # Rotas do Servidor Flask
@@ -63,22 +62,21 @@ application.add_handler(CallbackQueryHandler(button_callback))
 
 @app.route("/")
 def home():
-    """Rota principal para verificar se o app está no ar."""
-    return "Servidor do Bot está ativo e estável!"
+    return "Servidor do Bot está ativo com pyTelegramBotAPI!"
 
-@app.route("/telegram_webhook", methods=["POST"])
-async def telegram_webhook():
-    """Recebe as mensagens do Telegram."""
-    # ESTA É A CORREÇÃO FINAL E MAIS IMPORTANTE
-    # Inicializa o bot apenas na primeira requisição para garantir que o "motor" esteja ligado
-    if not application.post_init:
-        await application.initialize()
-        await application.post_init() # Esta é a parte corrigida
+# Configura o webhook quando o servidor inicia
+@app.route(f'/{TOKEN}', methods=['POST'])
+def get_message():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
 
-    try:
-        update_data = request.get_json(force=True)
-        update = Update.de_json(update_data, application.bot)
-        await application.process_update(update)
-    except Exception as e:
-        logging.error(f"Erro no webhook do Telegram: {e}")
-    return "ok", 200
+# Esta função é chamada uma vez quando o app inicia no Render
+if __name__ != "__main__":
+    bot.remove_webhook()
+    # Espera um pouco para garantir que o app está no ar antes de configurar o webhook
+    import time
+    time.sleep(0.5)
+    bot.set_webhook(url=f"{APP_URL}/{TOKEN}")
+    logging.info(f"Webhook configurado para: {APP_URL}/{TOKEN}")

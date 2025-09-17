@@ -20,3 +20,7 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+# Ignorar arquivos de ambiente local
+.env
+# Ignorar pastas de cache do Python
+__pycache__/
